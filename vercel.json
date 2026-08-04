@@ -1,6 +1,669 @@
-{
-  "version": 2,
-  "rewrites": [
-    { "source": "/", "destination": "/index.html" }
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>ReadPulse v3</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    html { color-scheme: dark; }
+    textarea, input, select, button { font: inherit; }
+    textarea { -webkit-user-select: text; user-select: text; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100">
+<div id="root"></div>
+<script type="text/babel">
+const { useEffect, useMemo, useRef, useState } = React;
+
+// Your existing shared Supabase classroom project.
+const SUPABASE_URL = 'https://clktivheghgiffyugwuq.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_NhpAEoKa5RCzLKao3Up4dA_diLrt-bt';
+const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: { persistSession: false }
+});
+
+const STAGES = ['Stage 2', 'Stage 3'];
+const DIFFICULTIES = ['Support', 'Core', 'Extension'];
+const TEXT_TYPES = [
+  'Narrative', 'Adventure', 'Mystery', 'Fantasy', 'Science fiction',
+  'Historical fiction', 'Diary entry', 'Letter', 'Informative report',
+  'Explanation', 'Persuasive text', 'Biography', 'Historical recount',
+  'News report', 'Feature article', 'Procedure', 'Interview', 'Hybrid text'
+];
+const FOCUSES = [
+  'Fluency and prosody', 'Vocabulary', 'Literal comprehension', 'Inference',
+  'Main idea and summarising', 'Scanning and locating', 'Author purpose',
+  'Text structure', 'Cause and effect', 'Evaluating ideas'
+];
+
+const TOPIC_BANKS = {
+  'English & imagination': [
+    'A mysterious door beneath the school', 'A town where nobody can lie',
+    'A robot joins a primary school', 'The day gravity disappeared',
+    'A secret library after dark', 'A child who can speak to animals',
+    'A time-travelling backpack', 'The last dragon egg',
+    'A detective at the school fete', 'A message from the future'
+  ],
+  'Australian history': [
+    'Early colonial Australia', 'The Gold Rush', 'The Eureka Stockade',
+    'Australian Federation', 'The life of an early settler child',
+    'Bushrangers and law enforcement', 'The First Fleet',
+    'Australian migration stories', 'ANZAC stories', 'Women who shaped Australia'
+  ],
+  'Government & civics': [
+    'How Australian democracy works', 'How a bill becomes a law',
+    'The role of the Prime Minister', 'Local, state and federal government',
+    'Voting and elections', 'The Governor-General', 'Rights and responsibilities',
+    'Why communities need rules', 'A student parliament', 'Making change peacefully'
+  ],
+  'First Nations perspectives': [
+    'Caring for Country', 'Traditional ecological knowledge',
+    'The importance of language and storytelling', 'Connection to Country and Place',
+    'Seasonal calendars', 'First Nations inventions and technologies',
+    'Truth-telling and reconciliation', 'Aboriginal and Torres Strait Islander art',
+    'Native foods and sustainable practices', 'Community, kinship and belonging'
+  ],
+  'Science & technology': [
+    'The solar system', 'Mars exploration', 'Robots and artificial intelligence',
+    'How volcanoes form', 'Earthquakes', 'Extreme weather', 'Electric vehicles',
+    'Renewable energy', 'Amazing human body systems', 'Inventors and inventions',
+    'The science of sound', 'How bridges stay up', 'Future cities',
+    'Dinosaurs and fossils', 'Microscopic life'
+  ],
+  'Environment & geography': [
+    'Rainforests', 'Oceans and marine life', 'The Great Barrier Reef',
+    'Australian deserts', 'Natural disasters', 'Climate change solutions',
+    'Sustainability at school', 'National parks', 'World biomes',
+    'Countries and cultures', 'Water conservation', 'Threatened species',
+    'Antarctica', 'Plastic pollution', 'Food miles'
+  ],
+  'Health & wellbeing': [
+    'Friendship and belonging', 'Courage and resilience', 'Handling conflict',
+    'Healthy sleep', 'Digital citizenship', 'Online safety', 'Growth mindset',
+    'Managing stress', 'Teamwork', 'Fair play', 'Being an upstander',
+    'Healthy food choices', 'Exercise and the brain', 'Community wellbeing'
+  ],
+  'Arts, sport & popular interests': [
+    'Music and performance', 'Famous Australian artists', 'Animation',
+    'Behind the scenes of a movie', 'Olympic and Paralympic stories',
+    'Netball', 'Soccer', 'Minecraft design challenges', 'Video game creation',
+    'Dance', 'Street art', 'Photography', 'Cooking and food science',
+    'Unusual animal abilities', 'Record-breaking achievements'
+  ],
+  'Religion & values': [
+    'The parable of the Good Samaritan', 'The road to Emmaus',
+    'Hope and new life', 'Stewardship of creation', 'Serving others',
+    'Courageous people of faith', 'The meaning of Pentecost',
+    'Prayer and reflection', 'Justice and compassion', 'Building peaceful communities'
   ]
+};
+
+const card = 'rounded-2xl border border-slate-800 bg-slate-900 shadow-xl';
+const field = 'mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-slate-100 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/30';
+
+function App() {
+  const initialMode = new URLSearchParams(location.search).get('mode') === 'student' ? 'student' : 'teacher';
+  const [mode, setMode] = useState(initialMode);
+  const [tab, setTab] = useState('create');
+  const [students, setStudents] = useState([]);
+  const [sessions, setSessions] = useState([]);
+  const [progress, setProgress] = useState([]);
+  const [selected, setSelected] = useState([]);
+  const [stage, setStage] = useState('Stage 3');
+  const [difficulty, setDifficulty] = useState('Core');
+  const [textType, setTextType] = useState('Narrative');
+  const [focus, setFocus] = useState('Inference');
+  const [subject, setSubject] = useState(Object.keys(TOPIC_BANKS)[0]);
+  const [topic, setTopic] = useState(TOPIC_BANKS[Object.keys(TOPIC_BANKS)[0]][0]);
+  const [customTopic, setCustomTopic] = useState('');
+  const [generated, setGenerated] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState('');
+  const [studentName, setStudentName] = useState(localStorage.getItem('readpulse_student') || '');
+  const [activeSession, setActiveSession] = useState(null);
+  const [answers, setAnswers] = useState({});
+  const [reflection, setReflection] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const openedSessionRef = useRef(null);
+
+  async function load({ quiet = false } = {}) {
+    const [studentResult, sessionResult, progressResult] = await Promise.all([
+      db.from('students').select('id,first_name,display_order,active').eq('active', true).order('display_order'),
+      db.from('reading_sessions').select('*').order('created_at', { ascending: false }),
+      db.from('student_progress').select('*').order('created_at', { ascending: false })
+    ]);
+
+    if (studentResult.error && !quiet) setNotice('Could not load students: ' + studentResult.error.message);
+    if (sessionResult.error && !quiet) setNotice('Could not load readings: ' + sessionResult.error.message);
+    if (progressResult.error && !quiet) setNotice('Could not load progress: ' + progressResult.error.message);
+
+    setStudents(studentResult.data || []);
+    setSessions(sessionResult.data || []);
+    setProgress(progressResult.data || []);
+  }
+
+  useEffect(() => {
+    load();
+    const channel = db.channel('readpulse-v3-live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'reading_sessions' }, () => load({ quiet: true }))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'student_progress' }, () => {
+        // Avoid disturbing an iPad keyboard while a student is typing.
+        if (mode !== 'student') load({ quiet: true });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, () => load({ quiet: true }))
+      .subscribe();
+    return () => db.removeChannel(channel);
+  }, [mode]);
+
+  useEffect(() => {
+    const options = TOPIC_BANKS[subject] || [];
+    setTopic(options[0] || '');
+  }, [subject]);
+
+  useEffect(() => {
+    if (mode !== 'student' || !studentName) {
+      setActiveSession(null);
+      return;
+    }
+    const latest = sessions.find(session =>
+      session.is_pushed &&
+      Array.isArray(session.target_students) &&
+      session.target_students.includes(studentName)
+    );
+    setActiveSession(latest || null);
+  }, [mode, studentName, sessions]);
+
+  useEffect(() => {
+    if (!activeSession) return;
+    const savedKey = `readpulse_answers_${activeSession.id}_${studentName}`;
+    const savedReflectionKey = `readpulse_reflection_${activeSession.id}_${studentName}`;
+    try {
+      setAnswers(JSON.parse(localStorage.getItem(savedKey) || '{}'));
+    } catch {
+      setAnswers({});
+    }
+    setReflection(localStorage.getItem(savedReflectionKey) || '');
+  }, [activeSession?.id, studentName]);
+
+  useEffect(() => {
+    if (!activeSession || !studentName) return;
+    localStorage.setItem(`readpulse_answers_${activeSession.id}_${studentName}`, JSON.stringify(answers));
+  }, [answers, activeSession?.id, studentName]);
+
+  useEffect(() => {
+    if (!activeSession || !studentName) return;
+    localStorage.setItem(`readpulse_reflection_${activeSession.id}_${studentName}`, reflection);
+  }, [reflection, activeSession?.id, studentName]);
+
+  useEffect(() => {
+    if (mode !== 'student' || !studentName || !activeSession || openedSessionRef.current === activeSession.id) return;
+    openedSessionRef.current = activeSession.id;
+    markOpened(activeSession);
+  }, [mode, studentName, activeSession?.id]);
+
+  const stats = useMemo(() => ({
+    assigned: progress.filter(item => item.status === 'assigned').length,
+    opened: progress.filter(item => item.status === 'opened').length,
+    completed: progress.filter(item => item.status === 'completed').length
+  }), [progress]);
+
+  function toggleStudent(name) {
+    setSelected(current => current.includes(name) ? current.filter(item => item !== name) : [...current, name]);
+  }
+
+  function selectAll() {
+    setSelected(students.map(student => student.first_name));
+  }
+
+  function randomise() {
+    const subjects = Object.keys(TOPIC_BANKS);
+    const nextSubject = subjects[Math.floor(Math.random() * subjects.length)];
+    const nextTopics = TOPIC_BANKS[nextSubject];
+    setSubject(nextSubject);
+    setTopic(nextTopics[Math.floor(Math.random() * nextTopics.length)]);
+    setTextType(TEXT_TYPES[Math.floor(Math.random() * TEXT_TYPES.length)]);
+    setFocus(FOCUSES[Math.floor(Math.random() * FOCUSES.length)]);
+    setCustomTopic('');
+  }
+
+  async function generateReading() {
+    if (!selected.length) {
+      setNotice('Choose at least one student first.');
+      return;
+    }
+
+    const chosenTopic = customTopic.trim() || topic;
+    const settings = stage === 'Stage 2'
+      ? { words: difficulty === 'Support' ? '250–330' : difficulty === 'Extension' ? '430–520' : '330–430', sections: 3, questions: 5 }
+      : { words: difficulty === 'Support' ? '400–500' : difficulty === 'Extension' ? '700–850' : '520–680', sections: 4, questions: 7 };
+
+    const difficultyDirection = difficulty === 'Support'
+      ? 'Use clear paragraphing, shorter sentences, accessible vocabulary, strong context clues, and mostly literal questions with gentle inference.'
+      : difficulty === 'Extension'
+        ? 'Use sophisticated but age-appropriate vocabulary, varied syntax, layered ideas, subtle inference, and evaluative questions.'
+        : 'Use age-appropriate vocabulary, varied sentence structures, and a balanced mix of literal, inferential and evaluative questions.';
+
+    const prompt = `Create an original NSW ${stage} ${textType} about "${chosenTopic}" for primary students. Subject area: ${subject}. Reading focus: ${focus}. Difficulty: ${difficulty}. ${difficultyDirection}
+
+Write ${settings.sections} coherent sections totalling approximately ${settings.words} words. Make the text engaging, accurate, culturally respectful and suitable for an Australian classroom. Avoid repeating generic plots. Include 6 useful vocabulary words with student-friendly definitions and ${settings.questions} comprehension questions. Questions must include their type (literal, inferential, vocabulary, author purpose, evaluative or summarising as appropriate).
+
+Return ONLY valid JSON in this exact shape:
+{"title":"...","readingTimeMinutes":5,"sections":[{"heading":"...","content":"..."}],"vocabularyList":[{"word":"...","definition":"..."}],"comprehensionQuestions":[{"type":"literal","question":"..."}]}`;
+
+    setBusy(true);
+    setNotice(`Generating a ${stage} ${textType.toLowerCase()}…`);
+    try {
+      const response = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt })
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Generation failed.');
+      if (!result.data) throw new Error('Gemini returned no reading data.');
+      setGenerated({
+        ...result.data,
+        stage,
+        difficulty,
+        subject,
+        topic: chosenTopic,
+        textType,
+        focus,
+        targetStudents: [...selected]
+      });
+      setNotice('Reading generated. Review it, then assign it.');
+    } catch (error) {
+      setNotice('Generation error: ' + error.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function assignReading() {
+    if (!generated || !selected.length) return;
+    setBusy(true);
+    const payload = {
+      title: generated.title,
+      text_type: textType,
+      topic: generated.topic,
+      focus_area: focus,
+      group_name: `${stage} | ${difficulty} | ${subject}`,
+      target_students: selected,
+      reading_time_minutes: generated.readingTimeMinutes || 5,
+      sections: generated.sections || [],
+      vocabulary_list: generated.vocabularyList || [],
+      comprehension_qs: generated.comprehensionQuestions || [],
+      is_pushed: true
+    };
+
+    const { data, error } = await db.from('reading_sessions').insert(payload).select().single();
+    if (error) {
+      setNotice('Could not assign: ' + error.message);
+      setBusy(false);
+      return;
+    }
+
+    const rows = selected.map(name => ({ session_id: data.id, student_name: name, status: 'assigned' }));
+    const { error: progressError } = await db.from('student_progress').upsert(rows, { onConflict: 'session_id,student_name' });
+    if (progressError) {
+      setNotice('Reading was created, but progress tracking failed: ' + progressError.message);
+      setBusy(false);
+      return;
+    }
+
+    setGenerated(null);
+    setNotice(`Assigned successfully to ${selected.join(', ')}.`);
+    setBusy(false);
+    load({ quiet: true });
+  }
+
+  async function markOpened(session) {
+    if (!session || !studentName) return;
+    await db.from('student_progress').upsert({
+      session_id: session.id,
+      student_name: studentName,
+      status: 'opened',
+      opened_at: new Date().toISOString()
+    }, { onConflict: 'session_id,student_name' });
+  }
+
+  async function submitReading() {
+    if (!activeSession || !studentName || submitting) return;
+    setSubmitting(true);
+    const answerRows = (activeSession.comprehension_qs || []).map(question => ({
+      type: question.type || '',
+      question: question.question,
+      answer: answers[question.question] || ''
+    }));
+
+    const { error } = await db.from('student_progress').upsert({
+      session_id: activeSession.id,
+      student_name: studentName,
+      status: 'completed',
+      answers: answerRows,
+      student_reflection: reflection,
+      completed_at: new Date().toISOString()
+    }, { onConflict: 'session_id,student_name' });
+
+    if (error) {
+      setNotice('Could not submit: ' + error.message);
+    } else {
+      localStorage.removeItem(`readpulse_answers_${activeSession.id}_${studentName}`);
+      localStorage.removeItem(`readpulse_reflection_${activeSession.id}_${studentName}`);
+      setNotice('Reading completed and sent to your teacher.');
+      await load({ quiet: true });
+    }
+    setSubmitting(false);
+  }
+
+  function changeMode() {
+    const next = mode === 'teacher' ? 'student' : 'teacher';
+    setMode(next);
+    history.replaceState({}, '', next === 'student' ? '?mode=student' : '/');
+  }
+
+  function Shell({ children }) {
+    return <div className="min-h-screen">
+      <header className="sticky top-0 z-30 border-b border-slate-800 bg-slate-900/95 backdrop-blur">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 p-4">
+          <div>
+            <h1 className="text-2xl font-black tracking-tight">ReadPulse <span className="text-indigo-400">v3</span></h1>
+            <p className="text-sm text-slate-400">Differentiated reading for Stage 2 and Stage 3</p>
+          </div>
+          <button onClick={changeMode} className="rounded-xl bg-slate-800 px-4 py-2 font-medium hover:bg-slate-700">
+            Switch to {mode === 'teacher' ? 'student' : 'teacher'} view
+          </button>
+        </div>
+      </header>
+      {children}
+    </div>;
+  }
+
+  function TeacherView() {
+    return <Shell>
+      <main className="mx-auto max-w-7xl space-y-6 p-4 md:p-6">
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Stat label="Assigned" value={stats.assigned} />
+          <Stat label="Opened" value={stats.opened} />
+          <Stat label="Completed" value={stats.completed} />
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <Tab name="create" label="Create & assign" />
+          <Tab name="progress" label="Live progress" />
+          <Tab name="students" label="Student profiles" />
+        </div>
+
+        {notice && <div className="rounded-xl border border-indigo-500/30 bg-indigo-500/10 p-3 text-indigo-100">{notice}</div>}
+
+        {tab === 'create' && <div className="grid gap-6 lg:grid-cols-[390px_1fr]">
+          <section className={`${card} space-y-5 p-5`}>
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-bold">1. Choose readers</h2>
+              <div className="flex gap-2 text-xs">
+                <button onClick={selectAll} className="rounded-lg bg-slate-800 px-2 py-1">All</button>
+                <button onClick={() => setSelected([])} className="rounded-lg bg-slate-800 px-2 py-1">Clear</button>
+              </div>
+            </div>
+
+            <div className="grid max-h-64 grid-cols-2 gap-2 overflow-auto pr-1">
+              {students.map(student => <button
+                key={student.id}
+                onClick={() => toggleStudent(student.first_name)}
+                className={`rounded-xl border p-3 text-left font-semibold ${selected.includes(student.first_name) ? 'border-indigo-400 bg-indigo-600' : 'border-slate-800 bg-slate-950 hover:border-slate-600'}`}
+              >{student.first_name}</button>)}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <label className="text-sm">Stage
+                <select value={stage} onChange={event => setStage(event.target.value)} className={field}>
+                  {STAGES.map(value => <option key={value}>{value}</option>)}
+                </select>
+              </label>
+              <label className="text-sm">Level
+                <select value={difficulty} onChange={event => setDifficulty(event.target.value)} className={field}>
+                  {DIFFICULTIES.map(value => <option key={value}>{value}</option>)}
+                </select>
+              </label>
+            </div>
+
+            <label className="block text-sm">Text type
+              <select value={textType} onChange={event => setTextType(event.target.value)} className={field}>
+                {TEXT_TYPES.map(value => <option key={value}>{value}</option>)}
+              </select>
+            </label>
+
+            <label className="block text-sm">Reading focus
+              <select value={focus} onChange={event => setFocus(event.target.value)} className={field}>
+                {FOCUSES.map(value => <option key={value}>{value}</option>)}
+              </select>
+            </label>
+
+            <label className="block text-sm">Subject or theme
+              <select value={subject} onChange={event => setSubject(event.target.value)} className={field}>
+                {Object.keys(TOPIC_BANKS).map(value => <option key={value}>{value}</option>)}
+              </select>
+            </label>
+
+            <label className="block text-sm">Topic
+              <select value={topic} onChange={event => setTopic(event.target.value)} className={field}>
+                {(TOPIC_BANKS[subject] || []).map(value => <option key={value}>{value}</option>)}
+              </select>
+            </label>
+
+            <label className="block text-sm">Or type any topic
+              <input value={customTopic} onChange={event => setCustomTopic(event.target.value)} placeholder="e.g. sharks, netball, Minecraft, bushfires…" className={field} />
+            </label>
+
+            <button onClick={randomise} className="w-full rounded-xl bg-slate-800 py-2 font-medium hover:bg-slate-700">Surprise me</button>
+            <button disabled={busy} onClick={generateReading} className="w-full rounded-xl bg-indigo-600 py-3 font-bold hover:bg-indigo-500 disabled:opacity-50">
+              {busy ? 'Working…' : 'Generate reading'}
+            </button>
+          </section>
+
+          <section className={`${card} min-h-[650px] p-6`}>
+            <h2 className="mb-4 text-xl font-bold">2. Review and assign</h2>
+            {!generated
+              ? <div className="flex min-h-[520px] items-center justify-center text-center text-slate-400">
+                  <div><div className="mb-3 text-5xl">📖</div>Your generated reading will appear here.</div>
+                </div>
+              : <div className="space-y-6">
+                  <div>
+                    <div className="mb-2 flex flex-wrap gap-2 text-xs">
+                      {[generated.stage, generated.difficulty, generated.textType, generated.focus].map(value => <span key={value} className="rounded-full bg-indigo-500/15 px-3 py-1 text-indigo-200">{value}</span>)}
+                    </div>
+                    <h3 className="text-3xl font-black">{generated.title}</h3>
+                    <p className="mt-1 text-slate-400">{generated.subject} • {generated.topic}</p>
+                  </div>
+                  {(generated.sections || []).map((section, index) => <article key={index}>
+                    <h4 className="mb-1 text-lg font-bold text-indigo-300">{section.heading || `Part ${index + 1}`}</h4>
+                    <p className="whitespace-pre-wrap leading-7 text-slate-200">{section.content}</p>
+                  </article>)}
+                  <div>
+                    <h4 className="mb-2 text-lg font-bold">Vocabulary</h4>
+                    <div className="grid gap-2 md:grid-cols-2">
+                      {(generated.vocabularyList || []).map((item, index) => <div key={index} className="rounded-xl bg-slate-950 p-3"><b>{item.word}</b>: {item.definition}</div>)}
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="mb-2 text-lg font-bold">Questions</h4>
+                    <ol className="space-y-2 pl-5">
+                      {(generated.comprehensionQuestions || []).map((item, index) => <li key={index} className="list-decimal"><span className="text-xs uppercase text-indigo-300">{item.type}</span> — {item.question}</li>)}
+                    </ol>
+                  </div>
+                  <button disabled={busy} onClick={assignReading} className="w-full rounded-xl bg-emerald-600 py-3 font-bold hover:bg-emerald-500 disabled:opacity-50">Assign to selected students</button>
+                </div>}
+          </section>
+        </div>}
+
+        {tab === 'progress' && <ProgressTable />}
+        {tab === 'students' && <section className={`${card} p-5`}>
+          <h2 className="mb-4 text-xl font-bold">Student profiles</h2>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {students.map(student => <div key={student.id} className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+              <div className="text-lg font-bold">{student.first_name}</div>
+              <div className="text-sm text-slate-400">Active reader</div>
+            </div>)}
+          </div>
+        </section>}
+      </main>
+    </Shell>;
+  }
+
+  function ProgressTable() {
+    return <section className={`${card} overflow-hidden`}>
+      <div className="p-5">
+        <h2 className="text-xl font-bold">Live progress</h2>
+        <p className="text-sm text-slate-400">See when students open and complete their assigned readings.</p>
+      </div>
+      <div className="overflow-auto">
+        <table className="w-full min-w-[720px] text-sm">
+          <thead className="bg-slate-800">
+            <tr><th className="p-3 text-left">Student</th><th className="p-3 text-left">Reading</th><th className="p-3 text-left">Stage / level</th><th className="p-3 text-left">Status</th><th className="p-3 text-left">Reflection</th></tr>
+          </thead>
+          <tbody>
+            {progress.map(item => {
+              const session = sessions.find(value => value.id === item.session_id);
+              return <tr key={item.id || `${item.session_id}-${item.student_name}`} className="border-t border-slate-800">
+                <td className="p-3 font-semibold">{item.student_name}</td>
+                <td className="p-3">{session?.title || 'Reading'}</td>
+                <td className="p-3 text-slate-400">{session?.group_name || '—'}</td>
+                <td className="p-3"><StatusPill status={item.status} /></td>
+                <td className="max-w-xs p-3 text-slate-400">{item.student_reflection || '—'}</td>
+              </tr>;
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>;
+  }
+
+  function StudentView() {
+    return <Shell>
+      <main className="mx-auto max-w-4xl p-4 md:p-6">
+        {notice && <div className="mb-5 rounded-xl border border-indigo-500/30 bg-indigo-500/10 p-3 text-indigo-100">{notice}</div>}
+        {!studentName
+          ? <section className={`${card} p-6`}>
+              <h2 className="text-2xl font-black">Who is reading today?</h2>
+              <p className="mb-5 mt-1 text-slate-400">Tap your own name.</p>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+                {students.map(student => <button key={student.id} onClick={() => {
+                  localStorage.setItem('readpulse_student', student.first_name);
+                  setStudentName(student.first_name);
+                  setNotice('');
+                }} className="rounded-xl border border-slate-700 bg-slate-950 p-4 text-lg font-bold hover:border-indigo-400">{student.first_name}</button>)}
+              </div>
+            </section>
+          : <div className="space-y-5">
+              <div className="flex items-center justify-between gap-4">
+                <div><h2 className="text-2xl font-black">Hi, {studentName}</h2><p className="text-slate-400">Your latest assigned reading</p></div>
+                <button onClick={() => {
+                  localStorage.removeItem('readpulse_student');
+                  setStudentName('');
+                  setActiveSession(null);
+                }} className="rounded-xl bg-slate-800 px-3 py-2">Change profile</button>
+              </div>
+              {!activeSession
+                ? <section className={`${card} p-12 text-center`}>
+                    <div className="mb-4 text-5xl">📚</div>
+                    <h3 className="text-xl font-bold">No reading assigned yet</h3>
+                    <p className="mt-2 text-slate-400">Your teacher's next reading will appear here.</p>
+                  </section>
+                : <ReadingCard />}
+            </div>}
+      </main>
+    </Shell>;
+  }
+
+  function ReadingCard() {
+    const questions = activeSession.comprehension_qs || [];
+    return <section className={`${card} space-y-7 p-5 md:p-7`}>
+      <div>
+        <span className="text-xs font-bold uppercase tracking-wider text-indigo-300">Assigned reading</span>
+        <h3 className="mt-1 text-3xl font-black">{activeSession.title}</h3>
+        <p className="mt-1 text-slate-400">{activeSession.group_name || 'Reading'} • {activeSession.topic} • {activeSession.focus_area}</p>
+      </div>
+
+      {(activeSession.sections || []).map((section, index) => <article key={index}>
+        <h4 className="mb-2 text-xl font-bold text-indigo-300">{section.heading || `Part ${index + 1}`}</h4>
+        <p className="whitespace-pre-wrap text-lg leading-8">{section.content}</p>
+      </article>)}
+
+      {(activeSession.vocabulary_list || []).length > 0 && <div>
+        <h4 className="mb-2 text-xl font-bold">Vocabulary</h4>
+        <div className="grid gap-2 md:grid-cols-2">
+          {activeSession.vocabulary_list.map((item, index) => <div key={index} className="rounded-xl bg-slate-950 p-3"><b>{item.word}</b>: {item.definition}</div>)}
+        </div>
+      </div>}
+
+      {questions.length > 0 && <div className="space-y-5">
+        <div><h4 className="text-xl font-bold">Comprehension</h4><p className="text-sm text-slate-400">Your answers save automatically on this device while you type.</p></div>
+        {questions.map((question, index) => <div key={`${activeSession.id}-${index}`}>
+          <label htmlFor={`answer-${index}`} className="block font-semibold">
+            <span className="mr-2 text-indigo-300">{index + 1}.</span>{question.question}
+          </label>
+          <div className="mt-1 text-xs uppercase tracking-wide text-slate-500">{question.type || 'Question'}</div>
+          <textarea
+            id={`answer-${index}`}
+            value={answers[question.question] || ''}
+            onChange={event => {
+              const value = event.target.value;
+              setAnswers(current => ({ ...current, [question.question]: value }));
+            }}
+            placeholder="Type your answer here…"
+            autoComplete="off"
+            spellCheck="true"
+            className="mt-2 min-h-28 w-full resize-y rounded-xl border border-slate-700 bg-slate-950 p-4 text-base text-slate-100 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/30"
+          />
+        </div>)}
+      </div>}
+
+      <div>
+        <label htmlFor="reflection" className="block font-semibold">How did this reading feel?</label>
+        <textarea
+          id="reflection"
+          value={reflection}
+          onChange={event => setReflection(event.target.value)}
+          placeholder="Easy, just right, tricky, or something you noticed…"
+          autoComplete="off"
+          spellCheck="true"
+          className="mt-2 min-h-24 w-full resize-y rounded-xl border border-slate-700 bg-slate-950 p-4 text-base text-slate-100 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/30"
+        />
+      </div>
+
+      <button disabled={submitting} onClick={submitReading} className="w-full rounded-xl bg-emerald-600 py-3 font-bold hover:bg-emerald-500 disabled:opacity-50">
+        {submitting ? 'Sending…' : 'Finish and send to teacher'}
+      </button>
+    </section>;
+  }
+
+  function Stat({ label, value }) {
+    return <div className={`${card} p-5`}><div className="text-sm text-slate-400">{label}</div><div className="mt-1 text-3xl font-black">{value}</div></div>;
+  }
+
+  function Tab({ name, label }) {
+    return <button onClick={() => setTab(name)} className={`rounded-xl px-4 py-2 font-semibold ${tab === name ? 'bg-indigo-600' : 'bg-slate-800 hover:bg-slate-700'}`}>{label}</button>;
+  }
+
+  function StatusPill({ status }) {
+    const style = status === 'completed'
+      ? 'bg-emerald-500/20 text-emerald-300'
+      : status === 'opened'
+        ? 'bg-amber-500/20 text-amber-300'
+        : 'bg-slate-700 text-slate-200';
+    return <span className={`rounded-full px-2 py-1 ${style}`}>{status || 'assigned'}</span>;
+  }
+
+  return mode === 'student' ? <StudentView /> : <TeacherView />;
 }
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
