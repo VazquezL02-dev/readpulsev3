@@ -64,3 +64,4 @@ https://YOUR-APP.vercel.app/?mode=student
 ## Important privacy note
 
 This classroom prototype uses open anonymous Supabase policies so shared student devices can work without accounts. Do not store sensitive student information. Before using it beyond your own controlled class, add proper authentication and restricted Row Level Security policies.
+Deployment refresh
