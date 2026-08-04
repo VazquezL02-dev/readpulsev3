@@ -1,3 +1,70 @@
+const readingSchema = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    title: { type: 'string' },
+    readingTimeMinutes: { type: 'integer', minimum: 1, maximum: 30 },
+    sections: {
+      type: 'array',
+      minItems: 1,
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          heading: { type: 'string' },
+          content: { type: 'string' }
+        },
+        required: ['heading', 'content']
+      }
+    },
+    vocabularyList: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          word: { type: 'string' },
+          definition: { type: 'string' }
+        },
+        required: ['word', 'definition']
+      }
+    },
+    comprehensionQuestions: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          type: {
+            type: 'string',
+            enum: ['literal', 'inferential', 'vocabulary', 'author purpose', 'evaluative', 'summarising']
+          },
+          question: { type: 'string' }
+        },
+        required: ['type', 'question']
+      }
+    }
+  },
+  required: ['title', 'readingTimeMinutes', 'sections', 'vocabularyList', 'comprehensionQuestions']
+};
+
+function stripCodeFences(value) {
+  return String(value || '')
+    .replace(/^```json\s*/i, '')
+    .replace(/^```\s*/i, '')
+    .replace(/```\s*$/i, '')
+    .trim();
+}
+
+function validateReading(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Gemini returned an invalid reading object.');
+  if (typeof value.title !== 'string' || !value.title.trim()) throw new Error('Gemini did not return a title.');
+  if (!Array.isArray(value.sections) || value.sections.length === 0) throw new Error('Gemini did not return reading sections.');
+  if (!Array.isArray(value.vocabularyList)) throw new Error('Gemini did not return a vocabulary list.');
+  if (!Array.isArray(value.comprehensionQuestions)) throw new Error('Gemini did not return comprehension questions.');
+  return value;
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed.' });
@@ -20,20 +87,37 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
         generationConfig: {
-          responseMimeType: 'application/json',
-          maxOutputTokens: 8192
+          maxOutputTokens: 8192,
+          responseFormat: {
+            text: {
+              mimeType: 'application/json',
+              schema: readingSchema
+            }
+          }
         }
       })
     });
 
-    const data = await response.json();
+    const payload = await response.json();
     if (!response.ok) {
-      return res.status(response.status).json({ error: data?.error?.message || 'Gemini request failed.' });
+      return res.status(response.status).json({ error: payload?.error?.message || 'Gemini request failed.' });
     }
 
-    const text = data?.candidates?.[0]?.content?.parts?.map(part => part.text || '').join('') || '';
+    const text = payload?.candidates?.[0]?.content?.parts?.map(part => part.text || '').join('') || '';
     if (!text) return res.status(502).json({ error: 'Gemini returned no text.' });
-    return res.status(200).json({ text });
+
+    let reading;
+    try {
+      reading = validateReading(JSON.parse(stripCodeFences(text)));
+    } catch (parseError) {
+      console.error('Gemini JSON parse error:', parseError.message, text.slice(0, 1000));
+      return res.status(502).json({
+        error: 'Gemini returned a malformed reading. Please press Generate again.',
+        details: parseError.message
+      });
+    }
+
+    return res.status(200).json({ data: reading });
   } catch (error) {
     return res.status(500).json({ error: error.message || 'Unexpected generation error.' });
   }
