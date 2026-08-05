@@ -13,7 +13,7 @@
   <style>
     html { color-scheme: dark; }
     textarea, input, select, button { font: inherit; }
-    textarea { -webkit-user-select: text; user-select: text; touch-action: manipulation; pointer-events: auto; position: relative; z-index: 1; }
+    textarea { -webkit-user-select: text; user-select: text; }
   </style>
 </head>
 <body class="bg-slate-950 text-slate-100">
@@ -264,16 +264,19 @@ Return ONLY valid JSON in this exact shape:
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt })
       });
-      const result = await response.json();
+      const rawResponse = await response.text();
+      let result;
+      try {
+        result = rawResponse ? JSON.parse(rawResponse) : {};
+      } catch (parseError) {
+        console.error('Non-JSON API response:', rawResponse);
+        throw new Error('The reading server returned an error. Please try again after the newest Vercel deployment is ready.');
+      }
       if (!response.ok) throw new Error(result.error || 'Generation failed.');
-      const parsed = result.data || (() => {
-        const clean = String(result.text || '')
-          .replace(/^```json\s*/i, '')
-          .replace(/^```\s*/i, '')
-          .replace(/```$/i, '')
-          .trim();
-        return JSON.parse(clean);
-      })();
+      const parsed = result.data;
+      if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.sections)) {
+        throw new Error('The server did not return a complete reading.');
+      }
       setGenerated({
         ...parsed,
         stage,
@@ -582,13 +585,13 @@ Return ONLY valid JSON in this exact shape:
                     <h3 className="text-xl font-bold">No reading assigned yet</h3>
                     <p className="mt-2 text-slate-400">Your teacher's next reading will appear here.</p>
                   </section>
-                : ReadingCard()}
+                : renderReadingCard()}
             </div>}
       </main>
     </Shell>;
   }
 
-  function ReadingCard() {
+  function renderReadingCard() {
     const questions = activeSession.comprehension_qs || [];
     return <section className={`${card} space-y-7 p-5 md:p-7`}>
       <div>
