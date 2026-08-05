@@ -13,7 +13,7 @@
   <style>
     html { color-scheme: dark; }
     textarea, input, select, button { font: inherit; }
-    textarea { -webkit-user-select: text; user-select: text; }
+    textarea { -webkit-user-select: text; user-select: text; touch-action: manipulation; pointer-events: auto; position: relative; z-index: 1; }
   </style>
 </head>
 <body class="bg-slate-950 text-slate-100">
@@ -266,12 +266,14 @@ Return ONLY valid JSON in this exact shape:
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Generation failed.');
-      const clean = String(result.text || '')
-        .replace(/^```json\s*/i, '')
-        .replace(/^```\s*/i, '')
-        .replace(/```$/i, '')
-        .trim();
-      const parsed = JSON.parse(clean);
+      const parsed = result.data || (() => {
+        const clean = String(result.text || '')
+          .replace(/^```json\s*/i, '')
+          .replace(/^```\s*/i, '')
+          .replace(/```$/i, '')
+          .trim();
+        return JSON.parse(clean);
+      })();
       setGenerated({
         ...parsed,
         stage,
@@ -580,7 +582,7 @@ Return ONLY valid JSON in this exact shape:
                     <h3 className="text-xl font-bold">No reading assigned yet</h3>
                     <p className="mt-2 text-slate-400">Your teacher's next reading will appear here.</p>
                   </section>
-                : <ReadingCard />}
+                : ReadingCard()}
             </div>}
       </main>
     </Shell>;

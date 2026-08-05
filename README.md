@@ -65,3 +65,13 @@ https://YOUR-APP.vercel.app/?mode=student
 
 This classroom prototype uses open anonymous Supabase policies so shared student devices can work without accounts. Do not store sensitive student information. Before using it beyond your own controlled class, add proper authentication and restricted Row Level Security policies.
 Deployment refresh
+
+## August 2026 fixes
+
+- Student answer boxes no longer remount after every keystroke, so the iPad keyboard stays focused.
+- The Gemini structured-output request now sends the MIME type enum expected by the current `generateContent` endpoint.
+- The browser now accepts the API's `{ data: ... }` response directly.
+
+## Public access from Google Sites
+
+ReadPulse itself does not require a student account. In Vercel, open **Project → Settings → Deployment Protection** and ensure the production domain is public. In Google Sites, embed the stable production domain shown under **Project → Settings → Domains**, not a generated deployment or preview URL containing a commit/branch suffix.

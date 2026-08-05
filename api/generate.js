@@ -90,7 +90,7 @@ export default async function handler(req, res) {
           maxOutputTokens: 8192,
           responseFormat: {
             text: {
-              mimeType: 'application/json',
+              mimeType: 'APPLICATION_JSON',
               schema: readingSchema
             }
           }
