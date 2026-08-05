@@ -41,3 +41,13 @@ if (
 ) {
   throw new Error('The server did not return a complete reading.');
 }
+setGenerated({
+  ...parsed,
+  stage,
+  difficulty,
+  subject,
+  topic: chosenTopic,
+  textType,
+  focus,
+  targetStudents: [...selected]
+});
