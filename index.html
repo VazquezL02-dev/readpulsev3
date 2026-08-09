@@ -1,3 +1,4 @@
+
 <!doctype html>
 <html lang="en">
 <head>
@@ -527,31 +528,93 @@ Return ONLY valid JSON in this exact shape:
   }
 
   function ProgressTable() {
-    return <section className={`${card} overflow-hidden`}>
-      <div className="p-5">
-        <h2 className="text-xl font-bold">Live progress</h2>
-        <p className="text-sm text-slate-400">See when students open and complete their assigned readings.</p>
-      </div>
-      <div className="overflow-auto">
-        <table className="w-full min-w-[720px] text-sm">
-          <thead className="bg-slate-800">
-            <tr><th className="p-3 text-left">Student</th><th className="p-3 text-left">Reading</th><th className="p-3 text-left">Stage / level</th><th className="p-3 text-left">Status</th><th className="p-3 text-left">Reflection</th></tr>
-          </thead>
-          <tbody>
-            {progress.map(item => {
-              const session = sessions.find(value => value.id === item.session_id);
-              return <tr key={item.id || `${item.session_id}-${item.student_name}`} className="border-t border-slate-800">
-                <td className="p-3 font-semibold">{item.student_name}</td>
-                <td className="p-3">{session?.title || 'Reading'}</td>
-                <td className="p-3 text-slate-400">{session?.group_name || '—'}</td>
-                <td className="p-3"><StatusPill status={item.status} /></td>
-                <td className="max-w-xs p-3 text-slate-400">{item.student_reflection || '—'}</td>
-              </tr>;
-            })}
-          </tbody>
-        </table>
-      </div>
-    </section>;
+    const [openResponse, setOpenResponse] = useState(null);
+
+    const completedAnswers = progress.flatMap(item =>
+      Array.isArray(item.answers)
+        ? item.answers.filter(answer => String(answer.answer || '').trim())
+        : []
+    );
+
+    const typeSummary = completedAnswers.reduce((summary, answer) => {
+      const type = answer.type || 'Question';
+      summary[type] = (summary[type] || 0) + 1;
+      return summary;
+    }, {});
+
+    return <div className="space-y-5">
+      <section className={`${card} p-5`}>
+        <h2 className="text-xl font-bold">Comprehension evidence</h2>
+        <p className="mt-1 text-sm text-slate-400">Submitted written responses are already saved in ReadPulse. This groups the evidence by question type.</p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {Object.keys(typeSummary).length === 0
+            ? <span className="text-sm text-slate-500">No submitted answers yet.</span>
+            : Object.entries(typeSummary).map(([type, count]) =>
+                <span key={type} className="rounded-full bg-indigo-500/15 px-3 py-1 text-sm text-indigo-200">
+                  {type}: {count} responses
+                </span>
+              )}
+        </div>
+        <p className="mt-3 text-xs text-slate-500">This version shows the students' actual responses and question types. It does not automatically judge open-ended answers correct or incorrect.</p>
+      </section>
+
+      <section className={`${card} overflow-hidden`}>
+        <div className="p-5">
+          <h2 className="text-xl font-bold">Live progress</h2>
+          <p className="text-sm text-slate-400">See when students open and complete their readings, then inspect their submitted answers.</p>
+        </div>
+        <div className="overflow-auto">
+          <table className="w-full min-w-[860px] text-sm">
+            <thead className="bg-slate-800">
+              <tr><th className="p-3 text-left">Student</th><th className="p-3 text-left">Reading</th><th className="p-3 text-left">Stage / level</th><th className="p-3 text-left">Status</th><th className="p-3 text-left">Reflection</th><th className="p-3 text-left">Responses</th></tr>
+            </thead>
+            <tbody>
+              {progress.map(item => {
+                const session = sessions.find(value => value.id === item.session_id);
+                const savedAnswers = Array.isArray(item.answers) ? item.answers : [];
+                const rowKey = item.id || `${item.session_id}-${item.student_name}`;
+                return <React.Fragment key={rowKey}>
+                  <tr className="border-t border-slate-800">
+                    <td className="p-3 font-semibold">{item.student_name}</td>
+                    <td className="p-3">{session?.title || 'Reading'}</td>
+                    <td className="p-3 text-slate-400">{session?.group_name || '—'}</td>
+                    <td className="p-3"><StatusPill status={item.status} /></td>
+                    <td className="max-w-xs p-3 text-slate-400">{item.student_reflection || '—'}</td>
+                    <td className="p-3">
+                      {savedAnswers.length
+                        ? <button
+                            onClick={() => setOpenResponse(current => current === rowKey ? null : rowKey)}
+                            className="rounded-lg bg-indigo-600 px-3 py-2 font-semibold hover:bg-indigo-500"
+                          >
+                            {openResponse === rowKey ? 'Hide answers' : `View answers (${savedAnswers.length})`}
+                          </button>
+                        : <span className="text-slate-500">—</span>}
+                    </td>
+                  </tr>
+                  {openResponse === rowKey && <tr className="border-t border-slate-800 bg-slate-950/60">
+                    <td colSpan="6" className="p-4">
+                      <div className="mb-3">
+                        <div className="font-bold">{item.student_name} — {session?.title || 'Reading'}</div>
+                        <div className="text-xs text-slate-500">Submitted comprehension responses</div>
+                      </div>
+                      <div className="space-y-3">
+                        {savedAnswers.map((answer, index) => <div key={index} className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+                          <div className="mb-1 text-xs font-bold uppercase tracking-wide text-indigo-300">{answer.type || 'Question'}</div>
+                          <div className="font-semibold">{index + 1}. {answer.question}</div>
+                          <div className="mt-2 rounded-lg bg-slate-950 p-3 text-slate-200">
+                            {String(answer.answer || '').trim() || <span className="italic text-slate-500">No answer submitted</span>}
+                          </div>
+                        </div>)}
+                      </div>
+                    </td>
+                  </tr>}
+                </React.Fragment>;
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>;
   }
 
   function StudentView() {
